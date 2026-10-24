@@ -1,0 +1,49 @@
+name: Build AB Studio APK
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Files lein
+        uses: actions/checkout@v4
+
+      - name: Zip kholein
+        run: |
+          if [ -f ABStudio.zip ]; then unzip -o -q ABStudio.zip -d . ; fi
+          ls -la
+
+      - name: Version number
+        run: echo "AB_VERSION=$((GITHUB_RUN_NUMBER + 100))" >> $GITHUB_ENV
+
+      - name: Sign key lagayein
+        env:
+          KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
+        run: |
+          if [ -z "$KEYSTORE_B64" ]; then echo "KEYSTORE_B64 secret nahi mila"; exit 1; fi
+          echo "$KEYSTORE_B64" | tr -d ' \r\n' | base64 -d > MyDownloader/app/ab-release.jks
+
+      - name: Java 17 setup
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: APK banayein
+        working-directory: MyDownloader
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon --stacktrace
+
+      - name: Public release (app ke andar update)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ env.AB_VERSION }}
+          name: AB Studio v${{ env.AB_VERSION }}
+          files: MyDownloader/app/build/outputs/apk/release/*.apk
